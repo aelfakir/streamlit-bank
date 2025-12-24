@@ -14,7 +14,7 @@ import json
 # --- Configuration ---
 # Store these in Streamlit Secrets for security!
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO_NAME = "your-username/streamlit-bank"
+REPO_NAME = "aelfakir/streamlit-bank" #your-username/applications' name
 FILE_PATH = "ledger.json"
 
 g = Github(GITHUB_TOKEN)
