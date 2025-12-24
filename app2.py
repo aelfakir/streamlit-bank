@@ -34,7 +34,7 @@ def update_ledger(new_data, sha, message):
 
 # --- 2. Streamlit UI Setup ---
 st.set_page_config(page_title="GitHub Mini-Pay", page_icon="💰")
-st.title("💰 Mini-Pay: GitHub Edition")
+st.title("💰 Adil-Pay")
 
 try:
     ledger, sha = get_ledger()
