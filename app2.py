@@ -11,49 +11,81 @@ import streamlit as st
 from github import Github
 import json
 
-# --- Configuration ---
-# Store these in Streamlit Secrets for security!
+# --- 1. Configuration & Connection ---
+# Make sure GITHUB_TOKEN is in your Streamlit Cloud Secrets!
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO_NAME = "aelfakir/streamlit-bank" #your-username/applications' name
+REPO_NAME = "aelfakir/streamlit-bank" 
 FILE_PATH = "ledger.json"
 
+# Initialize GitHub connection
 g = Github(GITHUB_TOKEN)
 repo = g.get_repo(REPO_NAME)
 
 def get_ledger():
+    """Fetches the current ledger and its unique SHA ID from GitHub."""
     file_content = repo.get_contents(FILE_PATH)
     data = json.loads(file_content.decoded_content.decode())
     return data, file_content.sha
 
 def update_ledger(new_data, sha):
+    """Uploads the updated dictionary back to GitHub."""
     content = json.dumps(new_data, indent=4)
-    repo.update_file(FILE_PATH, "Update balance", content, sha)
+    repo.update_file(FILE_PATH, "Transaction Update", content, sha)
 
-# --- Streamlit UI ---
+# --- 2. Streamlit User Interface ---
+st.set_page_config(page_title="GitHub Mini-Pay", page_icon="💸")
 st.title("💸 Mini-Pay: GitHub Edition")
 
-ledger, sha = get_ledger()
+# Fetch data at the start of every run
+try:
+    ledger, sha = get_ledger()
+except Exception as e:
+    st.error(f"Could not connect to GitHub: {e}")
+    st.stop()
 
-# Display Balances
-st.subheader("Current Balances")
-st.table(ledger)
+# Display Current Balances
+st.subheader("Bank Ledger")
+# Using columns to make the table look cleaner
+cols = st.columns(len(ledger))
+for i, (name, balance) in enumerate(ledger.items()):
+    cols[i].metric(label=name, value=f"${balance}")
 
-# Transaction Form
-with st.form("transfer_form"):
+st.divider()
+
+# --- 3. Transaction Form ---
+st.subheader("Send a Payment")
+with st.form("transfer_form", clear_on_submit=True):
     sender = st.selectbox("From", list(ledger.keys()))
-    recipient = st.selectbox("To", [name for name in ledger.keys() if name != sender])
-    amount = st.number_input("Amount", min_value=1, step=10)
-    submit = st.form_submit_button("Send Money")
+    # Filter recipient list so you can't send money to yourself
+    recipient_options = [name for name in ledger.keys() if name != sender]
+    recipient = st.selectbox("To", recipient_options)
+    
+    amount = st.number_input("Amount ($)", min_value=1, max_value=max(ledger.values()), step=10)
+    submit = st.form_submit_button("Confirm Transfer")
 
+# --- 4. Logic Execution ---
 if submit:
     if ledger[sender] >= amount:
-        # Perform Transfer
-        ledger[sender] -= amount
-        ledger[recipient] += amount
+        with st.spinner("Processing transaction on GitHub..."):
+            # Update local data
+            ledger[sender] -= amount
+            ledger[recipient] += amount
 
-        # Save to GitHub
-        update_ledger(ledger, sha)
-        st.success(f"Successfully sent ${amount} to {recipient}!")
-        st.balloons()
+            try:
+                # Push to GitHub
+                update_ledger(ledger, sha)
+                
+                # Feedback to user
+                st.success(f"Successfully transferred ${amount} from {sender} to {recipient}!")
+                st.balloons()
+                
+                # CRUCIAL: Rerun the app so the table shows the new values immediately
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Transaction failed during GitHub upload: {e}")
     else:
-        st.error("Insufficient funds!")
+        st.error(f"Insufficient funds! {sender} only has ${ledger[sender]}.")
+
+# Optional: Add a footer
+st.caption("Powered by Streamlit and GitHub API")
