@@ -33,7 +33,7 @@ def update_ledger(new_data, sha, message):
     repo.update_file(FILE_PATH, message, content, sha)
 
 # --- 2. Streamlit UI Setup ---
-st.set_page_config(page_title="GitHub Mini-Pay", page_icon="💰")
+st.set_page_config(page_title="Adil-Pay", page_icon="💰")
 st.title("💰 Adil-Pay")
 
 try:
