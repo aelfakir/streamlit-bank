@@ -10,82 +10,82 @@ Original file is located at
 import streamlit as st
 from github import Github
 import json
+from datetime import datetime
 
 # --- 1. Configuration & Connection ---
-# Make sure GITHUB_TOKEN is in your Streamlit Cloud Secrets!
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_NAME = "aelfakir/streamlit-bank" 
 FILE_PATH = "ledger.json"
 
-# Initialize GitHub connection
 g = Github(GITHUB_TOKEN)
 repo = g.get_repo(REPO_NAME)
 
 def get_ledger():
-    """Fetches the current ledger and its unique SHA ID from GitHub."""
     file_content = repo.get_contents(FILE_PATH)
     data = json.loads(file_content.decoded_content.decode())
+    # Ensure all balances are floats for decimal math
+    for user in data:
+        data[user] = float(data[user])
     return data, file_content.sha
 
-def update_ledger(new_data, sha):
-    """Uploads the updated dictionary back to GitHub."""
+def update_ledger(new_data, sha, message):
     content = json.dumps(new_data, indent=4)
-    repo.update_file(FILE_PATH, "Transaction Update", content, sha)
+    repo.update_file(FILE_PATH, message, content, sha)
 
-# --- 2. Streamlit User Interface ---
-st.set_page_config(page_title="GitHub Mini-Pay", page_icon="💸")
-st.title("💸 Mini-Pay: GitHub Edition")
+# --- 2. Streamlit UI Setup ---
+st.set_page_config(page_title="GitHub Mini-Pay", page_icon="💰")
+st.title("💰 Mini-Pay: GitHub Edition")
 
-# Fetch data at the start of every run
 try:
     ledger, sha = get_ledger()
 except Exception as e:
-    st.error(f"Could not connect to GitHub: {e}")
+    st.error(f"Error: {e}")
     st.stop()
 
-# Display Current Balances
+# --- 3. Display Balances (Two Decimals) ---
 st.subheader("Bank Ledger")
-# Using columns to make the table look cleaner
 cols = st.columns(len(ledger))
 for i, (name, balance) in enumerate(ledger.items()):
-    cols[i].metric(label=name, value=f"${balance}")
+    # Using :.2f to force two decimal places
+    cols[i].metric(label=name, value=f"${balance:,.2f}")
 
 st.divider()
 
-# --- 3. Transaction Form ---
-st.subheader("Send a Payment")
+# --- 4. Transaction Form ---
+st.subheader("New Payment")
 with st.form("transfer_form", clear_on_submit=True):
     sender = st.selectbox("From", list(ledger.keys()))
-    # Filter recipient list so you can't send money to yourself
-    recipient_options = [name for name in ledger.keys() if name != sender]
-    recipient = st.selectbox("To", recipient_options)
+    recipient = st.selectbox("To", [n for n in ledger.keys() if n != sender])
     
-    amount = st.number_input("Amount ($)", min_value=1, max_value=max(ledger.values()), step=10)
+    # Changed to float input for decimals
+    amount = st.number_input("Amount ($)", min_value=0.01, step=0.01, format="%.2f")
     submit = st.form_submit_button("Confirm Transfer")
 
-# --- 4. Logic Execution ---
+# --- 5. Logic Execution ---
 if submit:
     if ledger[sender] >= amount:
-        with st.spinner("Processing transaction on GitHub..."):
-            # Update local data
-            ledger[sender] -= amount
-            ledger[recipient] += amount
+        with st.spinner("Writing to GitHub..."):
+            # Update values
+            ledger[sender] = round(ledger[sender] - amount, 2)
+            ledger[recipient] = round(ledger[recipient] + amount, 2)
+
+            # Create a descriptive commit message
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            commit_msg = f"Transfer: {sender} sent ${amount:.2f} to {recipient} at {timestamp}"
 
             try:
-                # Push to GitHub
-                update_ledger(ledger, sha)
-                
-                # Feedback to user
-                st.success(f"Successfully transferred ${amount} from {sender} to {recipient}!")
+                update_ledger(ledger, sha, commit_msg)
+                st.success(f"Success! Sent ${amount:.2f} to {recipient}.")
                 st.balloons()
-                
-                # CRUCIAL: Rerun the app so the table shows the new values immediately
                 st.rerun()
-                
             except Exception as e:
-                st.error(f"Transaction failed during GitHub upload: {e}")
+                st.error(f"GitHub Write Error: {e}")
     else:
-        st.error(f"Insufficient funds! {sender} only has ${ledger[sender]}.")
+        st.error(f"Insufficient funds! {sender} has ${ledger[sender]:.2f}")
 
-# Optional: Add a footer
-st.caption("Powered by Streamlit and GitHub API")
+# --- 6. Show History (Optional) ---
+with st.expander("View Transaction History"):
+    st.write("Recent Activity (GitHub Commits):")
+    commits = repo.get_commits(path=FILE_PATH)
+    for c in commits[:5]: # Show last 5 transfers
+        st.text(f"• {c.commit.message}")
