@@ -26,8 +26,8 @@ def update_ledger(new_data, sha, message):
     repo.update_file(FILE_PATH, message, content, sha)
 
 # --- 2. Streamlit UI Setup ---
-st.set_page_config(page_title="GitHub Bank", page_icon="💰", layout="wide")
-st.title("💰 Mini-Pay: GitHub Edition")
+st.set_page_config(page_title="ELFAKIR Bank", page_icon="💰", layout="wide")
+st.title("💰 ELFAKIR-Pay:")
 
 # Load data at the start
 try:
